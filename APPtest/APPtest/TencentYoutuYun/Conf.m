@@ -25,9 +25,9 @@
 
 -(instancetype)init{
     self = [super init];
-    _appId = @"10094641";      // 替换APP_ID
-    _secretId = @"AKIDc7QcejpLq9LfnqkkPlCXgeQ8pQtELmmi";    // 替换SECRET_ID
-    _secretKey = @"wiIfqoarGTUJwYyBC9uiPLBpHXbTBmHp";   // 替换SECRET_KEY
+    _appId = @"10096776";      // 替换APP_ID
+    _secretId = @"AKIDLwjSbCi75xgEbtQAIGbljmkbHvbnKgMY";    // 替换SECRET_ID
+    _secretKey = @"WSH6oqiPKeR4mi6cGgBY2fRRI1d7va5Q";   // 替换SECRET_KEY
     _API_END_POINT = API_END_POINT;
     _API_VIP_END_POINT = API_VIP_END_POINT;
     return self;

@@ -44,8 +44,8 @@
     }
     
     [self.activity stopAnimating];
-//    self.queue = [[NSOperationQueue alloc] init];
-//    self.queue.maxConcurrentOperationCount = 1;
+    self.queue = [[NSOperationQueue alloc] init];
+    self.queue.maxConcurrentOperationCount = 3;
     
     _uploadImageArray = [NSMutableArray new];
     _codeArray = [NSMutableArray new];
@@ -216,7 +216,7 @@
     for (ALAsset *asset in assets) {
         //        UIImage *image = [UIImage imageWithCGImage:asset.defaultRepresentation.fullScreenImage];
         UIImage *image = [UIImage imageWithCGImage:asset.defaultRepresentation.fullResolutionImage
-                                             scale:asset.defaultRepresentation.scale
+                                             scale:asset.defaultRepresentation.scale * 0.5
                                        orientation:(UIImageOrientation)asset.defaultRepresentation.orientation];
         //        self.uploadImage = image;
         [_uploadImageArray addObject:image];
@@ -228,6 +228,68 @@
 {
     [imagePickerController dismissViewControllerAnimated:YES completion:NULL];
 }
+
+- (IBAction)uploadaa {
+    
+    //将正则表达式作为字符串赋值给变量regex
+    NSString *regex2 = @"^\\d{6}$";
+    
+    //根据正则表达式将NSPredicate的格式设置好
+    NSPredicate *pred2 = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", regex2];
+    
+    __weak typeof(self) weakself = self;
+    
+    
+    __block NSInteger count = 0;
+    
+    if (_uploadImageArray.count > 0 ) {
+        [self.activity startAnimating];
+        
+        for (UIImage * image in self.uploadImageArray) {
+            NSBlockOperation * oper = [NSBlockOperation blockOperationWithBlock:^{
+                
+                NSLog(@"%@",@"开始分析");
+                NSLog(@"%@",[NSThread currentThread]);
+                [weakself.frSDK namecardOcr:image sessionId:nil successBlock:^(id responseObject) {
+                    NSArray * array = responseObject[@"items"];
+                    NSLog(@"%@",@"分析成功");
+                    for (NSDictionary * dict in array) {
+                        NSString * text = [self filterWithString:dict[@"itemstring"]] ;
+                        BOOL isMatch2 = [pred2 evaluateWithObject:text];
+                        if (isMatch2) {
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                                [weakself.codeArray addObject:text];
+                            });
+                        }
+                    }
+                    
+                    count ++;
+                    if (count == self.uploadImageArray.count) {
+                        NSLog(@"%@",@"Done");
+                        NSLog(@"%@",weakself.codeArray);
+                        NSLog(@"%@",[NSThread currentThread]);
+                        [weakself.uploadImageArray removeAllObjects];
+                    }
+                    
+                } failureBlock:^(NSError *error) {
+                    NSLog(@"%@",error);
+                    NSLog(@"%@",@"分析失败");
+                    
+                    count ++;
+                    if (count == self.uploadImageArray.count) {
+                        NSLog(@"%@",@"Done");
+                        NSLog(@"%@",weakself.codeArray);
+                        NSLog(@"%@",[NSThread currentThread]);
+                        [weakself.uploadImageArray removeAllObjects];
+                    }
+                }];
+            }];
+            
+            [self.queue addOperation:oper];
+        }
+    }
+}
+
 - (IBAction)upload {
     
     //将正则表达式作为字符串赋值给变量regex
@@ -235,6 +297,8 @@
     
     //根据正则表达式将NSPredicate的格式设置好
     NSPredicate *pred2 = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", regex2];
+    
+        __block NSInteger count = 0;
     
     if (_uploadImageArray.count > 0 ) {
         
@@ -246,10 +310,11 @@
         
         dispatch_async(queue, ^{
             
+            dispatch_semaphore_t sema = dispatch_semaphore_create(4);
             [self.uploadImageArray enumerateObjectsUsingBlock:^(UIImage * image, NSUInteger idx, BOOL * _Nonnull stop) {
-                NSLog(@"%@",@"开始分析");
                 
-                dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+                dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
+                NSLog(@"%@",@"开始分析");
                 [weakself.frSDK namecardOcr:image sessionId:nil successBlock:^(id responseObject) {
                     NSArray * array = responseObject[@"items"];
                     
@@ -258,29 +323,36 @@
                         NSString * text = [self filterWithString:dict[@"itemstring"]] ;
                         BOOL isMatch2 = [pred2 evaluateWithObject:text];
                         if (isMatch2) {
-                            dispatch_async(dispatch_get_main_queue(), ^{
                                 [weakself.codeArray addObject:text];
-                            });
                         }
-                        
-                        dispatch_semaphore_signal(sema);
                     }
+                    dispatch_semaphore_signal(sema);
+                    
+                    count ++;
+                    if (count == self.uploadImageArray.count) {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            NSLog(@"%@",@"Done");
+                            NSLog(@"%@",weakself.codeArray);
+                            NSLog(@"%@",[NSThread currentThread]);
+                            [weakself.uploadImageArray removeAllObjects];
+                        });
+                    }
+                    
                 } failureBlock:^(NSError *error) {
                     NSLog(@"%@",error);
                     NSLog(@"%@",@"分析失败");
                     dispatch_semaphore_signal(sema);
+                    count ++;
+                    if (count == self.uploadImageArray.count) {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            NSLog(@"%@",@"Done");
+                            NSLog(@"%@",weakself.codeArray);
+                            NSLog(@"%@",[NSThread currentThread]);
+                            [weakself.uploadImageArray removeAllObjects];
+                        });
+                    }
                 }];
-                
-                dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER);
-                
             }];
-            
-            dispatch_async(dispatch_get_main_queue(), ^{
-                NSLog(@"%@",@"Done");
-                NSLog(@"%@",_codeArray);
-                queue = nil;
-                [self.activity stopAnimating];
-            });
         });
     }
 }
